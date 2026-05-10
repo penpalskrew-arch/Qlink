@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Clinic Queue System | Real-time Sync</title>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // ========== PASTE YOUR FIREBASE CONFIG HERE ==========
+        // Get this from Firebase Console > Project Settings > Your web app
+       const firebaseConfig = {
+  apiKey: "AIzaSyBhqATwCS3IR56QCIj_Qs7W6BU6v4rtwgM",
+  authDomain: "qlink-e15b0.firebaseapp.com",
+  projectId: "qlink-e15b0",
+  storageBucket: "qlink-e15b0.firebasestorage.app",
+  messagingSenderId: "923080891994",
+  appId: "1:923080891994:web:f089bb1314fdbab750c263",
+  measurementId: "G-DHYFTZFJQ7"
+};
+        // ======================================================
+        
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, runTransaction, onSnapshot, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+        
+        window.app = initializeApp(firebaseConfig);
+        window.db = getFirestore(window.app);
+        window.docRef = (path) => doc(window.db, path);
+        window.setDoc = setDoc;
+        window.updateDoc = updateDoc;
+        window.getDoc = getDoc;
+        window.getDocs = getDocs;
+        window.addDoc = addDoc;
+        window.deleteDoc = deleteDoc;
+        window.collection = collection;
+        window.query = query;
+        window.where = where;
+        window.runTransaction = runTransaction;
+        window.onSnapshot = onSnapshot;
+        window.serverTimestamp = serverTimestamp;
+        window.writeBatch = writeBatch;
+        
+        console.log("Firebase ready. Make sure Firestore is in test mode.");
+    </script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+        body { transition: background 0.2s, color 0.2s; }
+        
+        /* Themes */
+        body.theme-white { --bg: #FFFFFF; --card: #F8F9FA; --text: #212529; --text-secondary: #6C757D; --border: #DEE2E6; --primary: #0D6EFD; --primary-hover: #0B5ED7; --success: #198754; --danger: #DC3545; --warning: #FFC107; --info: #0DCAF0; --accent: #0D6EFD; }
+        body.theme-black { --bg: #0A0A0A; --card: #1A1A1A; --text: #EDEDED; --text-secondary: #A0A0A0; --border: #2C2C2C; --primary: #2E7D32; --primary-hover: #1B5E20; --success: #388E3C; --danger: #D32F2F; --warning: #F57C00; --info: #0288D1; --accent: #2E7D32; }
+        body.theme-nude { --bg: #F5EFE6; --card: #EADBC6; --text: #4A3B2C; --text-secondary: #7A5C4A; --border: #D4C4B0; --primary: #A67C52; --primary-hover: #8B653F; --success: #6B8E23; --danger: #B22234; --warning: #DAA520; --info: #4682B4; --accent: #A67C52; }
+        body.theme-lightblue { --bg: #EEF4FB; --card: #FFFFFF; --text: #1A2B4C; --text-secondary: #4A627A; --border: #C5D5EA; --primary: #2C7DA0; --primary-hover: #1F6390; --success: #2E9C6B; --danger: #E53E3E; --warning: #F6AD55; --info: #4299E1; --accent: #2C7DA0; }
+        
+        body { background: var(--bg); color: var(--text); }
+        .card { background: var(--card); border-radius: 1rem; padding: 1.25rem; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .btn { background: var(--primary); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 0.5rem; cursor: pointer; font-weight: 500; transition: 0.1s; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--text-secondary); }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); }
+        input, select, textarea { background: var(--card); border: 1px solid var(--border); padding: 0.6rem; border-radius: 0.5rem; color: var(--text); width: 100%; }
+        .grid { display: grid; gap: 1rem; }
+        .flex { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+        .hidden { display: none !important; }
+        .token-big { font-size: 3.5rem; font-weight: bold; text-align: center; padding: 1rem; background: var(--primary); color: white; border-radius: 1rem; display: inline-block; min-width: 140px; }
+        .live-dot { display: inline-block; width: 12px; height: 12px; background: #4ade80; border-radius: 50%; animation: pulse 1.5s infinite; margin-right: 6px; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: var(--card); border-radius: 1rem; padding: 1.5rem; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem; text-align: center; flex: 1; }
+        .stat-number { font-size: 2rem; font-weight: bold; color: var(--primary); }
+        .queue-item { padding: 0.75rem; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .queue-item:hover { background: var(--border); }
+        .position-ring { text-align: center; padding: 1.5rem; border-radius: 50%; background: var(--primary); color: white; font-weight: bold; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; margin: 0 auto; border-radius: 50%; font-size: 1.2rem; }
+        .loyalty-stamp { width: 40px; height: 40px; border-radius: 50%; background: var(--border); display: inline-flex; align-items: center; justify-content: center; margin: 4px; }
+        .loyalty-stamp.filled { background: gold; color: black; }
+        @media (max-width: 768px) { .flex { flex-direction: column; } .stat-box { width: 100%; } }
+    </style>
+</head>
+<body class="theme-lightblue" style="padding: 1rem; max-width: 1400px; margin: 0 auto;">
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="card" style="max-width: 400px; margin: 100px auto; text-align: center;">
+            <h2>Clinic Queue System</h2>
+            <select id="clinicSelect" class="full-width" style="margin: 1rem 0;"></select>
+            <input type="password" id="pinInput" placeholder="Enter PIN" style="margin: 0.5rem 0;">
+            <button id="loginBtn" class="btn">Login</button>
+            <div id="loginError" style="color: var(--danger); margin-top: 0.5rem;"></div>
+        </div>
+        
+        <!-- Main Dashboard (hidden until login) -->
+        <div id="dashboard" class="hidden">
+            <div class="flex" style="justify-content: space-between; margin-bottom: 1rem;">
+                <h2 id="clinicNameDisplay">Clinic</h2>
+                <div class="flex">
+                    <span class="live-dot"></span> Live
+                    <button id="logoutBtn" class="btn-secondary btn">Logout</button>
+                </div>
+            </div>
+            
+            <!-- Role-based panels -->
+            <div id="homePanel" class="hidden">
+                <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+                    <div class="card">
+                        <h3>Live Queue</h3>
+                        <p>Online: <span id="homeOnlineCount">0</span> | Walk-in: <span id="homeWalkinCount">0</span></p>
+                        <p>Current Token: <strong id="homeCurrentToken">-</strong></p>
+                        <p>Queue Hours: <span id="homeHours">-</span></p>
+                        <p id="closedDayMsg" style="color: var(--danger);"></p>
+                    </div>
+                    <div class="card cursor-pointer" onclick="window.switchRole('doctor')">🏥 Doctor Portal</div>
+                    <div class="card cursor-pointer" onclick="window.switchRole('checkin')">📝 Check-in</div>
+                    <div class="card cursor-pointer" onclick="window.switchRole('receptionist')">📋 Receptionist</div>
+                    <div class="card cursor-pointer" onclick="window.switchRole('admin')">⚙️ Admin Panel</div>
+                </div>
+            </div>
+            
+            <div id="checkinPanel" class="hidden">
+                <div class="card"><h3>Before Check-in</h3><p>⚠️ Missed: pushed behind 3 tokens · Late: please inform in advance · Cancelled: please inform in advance</p></div>
+                <div class="card" id="checkinLiveQueue"><h4>Live Queue Status</h4><p>Loading...</p></div>
+                <div class="card"><div class="flex"><button id="onlineToggle" class="btn">Online</button><button id="walkinToggle" class="btn-secondary btn">Walk-in</button></div></div>
+                <div class="card"><input type="text" id="patientName" placeholder="Full Name"><input type="tel" id="patientPhone" placeholder="Phone Number" style="margin-top: 0.5rem;"><input type="text" id="giftCode" placeholder="Gift Code (optional)" style="margin-top: 0.5rem;"></div>
+                <div class="card"><button id="checkinBtn" class="btn">Check-in</button></div>
+            </div>
+            
+            <div id="patientStatusPanel" class="hidden">
+                <div class="card" id="statusLiveInfo"></div>
+                <div class="card"><h3>Your Token</h3><div id="yourTokenDisplay" class="token-big">-</div></div>
+                <div class="card"><div id="positionRing" class="position-ring">Loading...</div></div>
+                <div id="delayBanner" class="card hidden" style="background: var(--warning);">⚠️ Clinic is running late</div>
+                <div id="visitCompleteMsg" class="card hidden"><p>✅ Visit complete! Please leave a review.</p><button id="googleReviewBtn" class="btn">⭐ Google Review</button></div>
+                <div class="card"><h4>Loyalty Stamps</h4><div id="loyaltyStamps"></div></div>
+                <div class="card"><button id="shareGiftBtn" class="btn">🎁 Share Gift Code via WhatsApp</button></div>
+            </div>
+            
+            <div id="doctorPanel" class="hidden">
+                <div class="flex"><button id="tvViewBtn" class="btn">📺 TV View</button><button id="emergencyModeBtn" class="btn-danger btn">🚨 Emergency Mode</button><button id="addVisitorBtn" class="btn">➕ Add Visitor</button></div>
+                <div class="card" id="currentPatientCard"><h3>Current Patient</h3><p>No active patient</p></div>
+                <div class="flex"><button id="roomReadyBtn" class="btn-success btn">Room Ready</button><button id="noShowBtn" class="btn-danger btn">No-show</button></div>
+                <div class="card"><textarea id="doctorNote" placeholder="Doctor's notes..."></textarea></div>
+                <div class="flex"><button id="delay2Btn" class="btn">+2 min</button><button id="delay5Btn" class="btn">+5 min</button><button id="delay10Btn" class="btn">+10 min</button><button id="pauseQueueBtn" class="btn-warning btn">⏸️ Pause</button><button id="resumeQueueBtn" class="btn-success btn">▶️ Resume</button></div>
+                <div class="card"><p>Queue Hours: <span id="doctorHours">-</span> | Max Patients: <span id="doctorMax">-</span> <span id="clinicFullMsg" style="color: var(--danger);"></span></p></div>
+                <div class="card"><h4>Closed Days</h4><div id="closedDaysToggles"></div></div>
+                <div class="flex"><label><input type="checkbox" id="manualAddToggle"> Manual Patient Adding</label><label><input type="checkbox" id="giftRedeemedToggle"> Gift Redeemed</label><input type="text" id="rewardDesc" placeholder="Reward Description" style="width: auto;"></div>
+                <div class="flex"><button id="clearQueueBtn" class="btn-danger btn">Clear Queue</button><button id="undoClearBtn" class="btn" disabled>Undo (10s)</button><button id="broadcastBtn" class="btn">📢 Broadcast</button></div>
+                <div class="card"><h4>Queue List</h4><div id="doctorQueueList"></div></div>
+            </div>
+            
+            <div id="receptionistPanel" class="hidden">
+                <div class="flex"><div class="stat-box"><div class="stat-number" id="statOnline">0</div>Online</div><div class="stat-box"><div class="stat-number" id="statWalkin">0</div>Walk-in</div><div class="stat-box"><div class="stat-number" id="statTotal">0</div>Total</div><div class="stat-box"><div class="stat-number" id="statNeedAssist">0</div>Need Assist</div></div>
+                <div id="noPhoneBanner" class="card hidden" style="background: var(--warning);">⚠️ Some patients missing phone numbers</div>
+                <div class="flex"><button id="recTVViewBtn" class="btn">📺 TV View</button><button id="recAddVisitorBtn" class="btn">➕ Add Visitor</button><button id="recAddPatientBtn" class="btn">➕ Add Patient</button><button id="recBroadcastBtn" class="btn">📢 Broadcast</button><button id="recClearQueueBtn" class="btn-danger btn">Clear Queue</button><button id="recUndoClearBtn" class="btn" disabled>Undo</button></div>
+                <div class="card"><h4>Queue List (tap to call)</h4><div id="receptionQueueList"></div></div>
+            </div>
+            
+            <div id="adminPanel" class="hidden">
+                <div class="card"><h3>All Clinics</h3><div id="clinicsList"></div></div>
+                <div class="card"><h3>Generate New Clinic</h3><input type="text" id="newClinicName" placeholder="Clinic Name"><input type="text" id="newDoctorPin" placeholder="Doctor PIN"><input type="text" id="newReceptionistPin" placeholder="Receptionist PIN"><input type="text" id="newHours" placeholder="Hours (e.g., 9AM-5PM)"><input type="number" id="newMaxPatients" placeholder="Max Patients"><input type="text" id="newClosedDays" placeholder="Closed days (e.g., Sunday)"><label><input type="checkbox" id="newLoyaltyToggle"> Enable Loyalty</label><input type="text" id="newRewardDesc" placeholder="Reward Description"><button id="createClinicBtn" class="btn">Create Clinic</button><div id="newClinicResult"></div></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modalContainer"></div>
+    
+    <script>
+        // Global state
+        window.currentClinicId = null;
+        window.currentRole = null;
+        window.currentPatientToken = null;
+        window.undoTimeout = null;
+        window.queueListener = null;
+        
+        const modalHtml = (title, content, onConfirm) => `<div class="modal"><div class="modal-content"><h3>${title}</h3>${content}<div class="flex" style="margin-top: 1rem;"><button class="btn" onclick="window.closeModal()">Cancel</button><button class="btn-success btn" onclick="(()=>{${onConfirm}; window.closeModal();})()">Confirm</button></div></div></div>`;
+        window.closeModal = () => document.getElementById('modalContainer').innerHTML = '';
+        
+        function showModal(title, content, onConfirm) { document.getElementById('modalContainer').innerHTML = modalHtml(title, content, onConfirm); }
+        
+        async function loadClinics() {
+            const clinicsSnap = await getDocs(collection(window.db, 'clinics'));
+            const select = document.getElementById('clinicSelect');
+            select.innerHTML = '<option value="">Select Clinic</option>';
+            clinicsSnap.forEach(doc => { select.innerHTML += `<option value="${doc.id}">${doc.data().name}</option>`; });
+        }
+        
+        async function login() {
+            const clinicId = document.getElementById('clinicSelect').value;
+            const pin = document.getElementById('pinInput').value;
+            if (!clinicId) { document.getElementById('loginError').innerText = 'Select clinic'; return; }
+            const clinicDoc = await getDoc(docRef(`clinics/${clinicId}`));
+            if (!clinicDoc.exists()) { document.getElementById('loginError').innerText = 'Clinic not found'; return; }
+            const data = clinicDoc.data();
+            let role = null;
+            if (pin === data.doctorPin) role = 'doctor';
+            else if (pin === data.receptionistPin) role = 'receptionist';
+            else if (pin === 'admin123') role = 'admin';
+            if (!role) { document.getElementById('loginError').innerText = 'Invalid PIN'; return; }
+            window.currentClinicId = clinicId;
+            window.currentRole = role;
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            document.getElementById('clinicNameDisplay').innerText = data.name;
+            document.body.className = `theme-${data.theme || 'lightblue'}`;
+            setupRealtimeSync();
+            switchRole(role);
+        }
+        
+        window.switchRole = (role) => {
+            document.querySelectorAll('[id$="Panel"]').forEach(p => p.classList.add('hidden'));
+            document.getElementById(`${role}Panel`).classList.remove('hidden');
+            if (role === 'checkin') loadCheckinQueue();
+            if (role === 'patientStatus' && window.currentPatientToken) refreshPatientStatus();
+            if (role === 'doctor') loadDoctorPanel();
+            if (role === 'receptionist') loadReceptionPanel();
+            if (role === 'admin') loadAdminPanel();
+        };
+        
+        async function setupRealtimeSync() {
+            if (window.queueListener) window.queueListener();
+            window.queueListener = onSnapshot(docRef(`clinics/${window.currentClinicId}/liveQueue/state`), (snap) => {
+                const data = snap.data() || { queue: [], currentToken: null, onlineCount: 0, walkinCount: 0, isPaused: false, delayMinutes: 0, closedDays: [], isFull: false };
+                window.queueData = data;
+                updateAllUIs();
+            });
+        }
+        
+        function updateAllUIs() {
+            if (!window.queueData) return;
+            const d = window.queueData;
+            document.getElementById('homeOnlineCount').innerText = d.onlineCount || 0;
+            document.getElementById('homeWalkinCount').innerText = d.walkinCount || 0;
+            document.getElementById('homeCurrentToken').innerText = d.currentToken || 'None';
+            if (document.getElementById('checkinLiveQueue')) document.getElementById('checkinLiveQueue').innerHTML = `<h4>Live Queue</h4><p>Online: ${d.onlineCount} | Walk-in: ${d.walkinCount} | Current: ${d.currentToken || '-'}</p>`;
+            if (document.getElementById('yourTokenDisplay') && window.currentPatientToken) {
+                const patient = d.queue.find(p => p.token === window.currentPatientToken);
+                if (patient) document.getElementById('yourTokenDisplay').innerText = patient.token;
+                const ahead = d.queue.filter(p => p.position < (patient?.position || 999)).length;
+                const ring = document.getElementById('positionRing');
+                if (ring) ring.innerText = ahead === 0 ? "It's your turn!" : ahead === 1 ? "You're next" : `${ahead} patients ahead`;
+            }
+        }
+        
+        async function loadCheckinQueue() { /* already handled by onSnapshot */ }
+        
+        async function refreshPatientStatus() {
+            const snap = await getDoc(docRef(`clinics/${window.currentClinicId}/liveQueue/state`));
+            const data = snap.data();
+            const patient = data.queue.find(p => p.token === window.currentPatientToken);
+            if (patient) {
+                document.getElementById('yourTokenDisplay').innerText = patient.token;
+                const ahead = data.queue.filter(p => p.position < patient.position).length;
+                document.getElementById('positionRing').innerHTML = ahead === 0 ? "It's your turn!" : ahead === 1 ? "You're next" : `${ahead} patients ahead`;
+                if (data.delayMinutes > 0) document.getElementById('delayBanner').classList.remove('hidden');
+                if (patient.status === 'completed') document.getElementById('visitCompleteMsg').classList.remove('hidden');
+                let stamps = patient.loyaltyStamps || 0;
+                let stampsHtml = '';
+                for(let i=0;i<10;i++) stampsHtml += `<div class="loyalty-stamp ${i<stamps ? 'filled' : ''}">${i<stamps ? '✓' : '○'}</div>`;
+                document.getElementById('loyaltyStamps').innerHTML = stampsHtml;
+            }
+        }
+        
+        async function loadDoctorPanel() {
+            const clinic = (await getDoc(docRef(`clinics/${window.currentClinicId}`))).data();
+            document.getElementById('doctorHours').innerText = clinic.hours || '9AM-5PM';
+            document.getElementById('doctorMax').innerText = clinic.maxPatients || 50;
+            let closedHtml = '';
+            ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(day => {
+                closedHtml += `<label><input type="checkbox" class="closedDayCheck" value="${day}" ${(window.queueData?.closedDays||[]).includes(day)?'checked':''}> ${day}</label>`;
+            });
+            document.getElementById('closedDaysToggles').innerHTML = closedHtml;
+            document.querySelectorAll('.closedDayCheck').forEach(cb => cb.onchange = async () => {
+                const closed = Array.from(document.querySelectorAll('.closedDayCheck:checked')).map(c => c.value);
+                await updateDoc(docRef(`clinics/${window.currentClinicId}/liveQueue/state`), { closedDays: closed });
+            });
+            renderDoctorQueue();
+        }
+        
+        function renderDoctorQueue() {
+            if(!window.queueData) return;
+            let html = '';
+            window.queueData.queue.forEach(p => { html += `<div class="queue-item" onclick="window.callNumber('${p.phone}')">${p.token} - ${p.name} - ${p.phone}</div>`; });
+            document.getElementById('doctorQueueList').innerHTML = html || '<p>Empty queue</p>';
+        }
+        
+        window.callNumber = (phone) => { window.location.href = `tel:${phone}`; };
+        
+        async function loadReceptionPanel() {
+            const d = window.queueData;
+            document.getElementById('statOnline').innerText = d.onlineCount || 0;
+            document.getElementById('statWalkin').innerText = d.walkinCount || 0;
+            document.getElementById('statTotal').innerText = (d.queue || []).length;
+            document.getElementById('statNeedAssist').innerText = (d.queue || []).filter(p => p.needAssist).length;
+            if((d.queue||[]).some(p => !p.phone)) document.getElementById('noPhoneBanner').classList.remove('hidden');
+            let queueHtml = '';
+            (d.queue || []).forEach(p => { queueHtml += `<div class="queue-item" onclick="window.callNumber('${p.phone}')">${p.token} - ${p.name} - ${p.phone}</div>`; });
+            document.getElementById('receptionQueueList').innerHTML = queueHtml || '<p>Empty</p>';
+        }
+        
+        async function loadAdminPanel() {
+            const clinicsSnap = await getDocs(collection(window.db, 'clinics'));
+            let html = '';
+            for(const docSnap of clinicsSnap.docs){
+                const data = docSnap.data();
+                html += `<div class="card"><strong>${data.name}</strong><br>Doctor PIN: ${data.doctorPin} | Receptionist PIN: ${data.receptionistPin}<br>
+                <select onchange="window.changeTheme('${docSnap.id}', this.value)"><option ${data.theme==='white'?'selected':''}>white</option><option ${data.theme==='black'?'selected':''}>black</option><option ${data.theme==='nude'?'selected':''}>nude</option><option ${data.theme==='lightblue'?'selected':''}>lightblue</option></select>
+                <button class="btn" onclick="window.copyLink('${docSnap.id}')">Copy Link</button>
+                <button class="btn" onclick="window.whatsappShare('${docSnap.id}')">WhatsApp</button></div>`;
+            }
+            document.getElementById('clinicsList').innerHTML = html;
+        }
+        
+        window.changeTheme = async (clinicId, theme) => { await updateDoc(docRef(`clinics/${clinicId}`), { theme }); if(clinicId === window.currentClinicId) document.body.className = `theme-${theme}`; };
+        window.copyLink = (id) => { navigator.clipboard.writeText(window.location.href + `?clinic=${id}`); alert('Link copied'); };
+        window.whatsappShare = (id) => { window.open(`https://wa.me/?text=Join clinic queue: ${window.location.href}?clinic=${id}`); };
+        
+        document.getElementById('loginBtn').onclick = login;
+        document.getElementById('logoutBtn').onclick = () => { window.location.reload(); };
+        
+        // Check-in logic with transaction
+        document.getElementById('checkinBtn')?.addEventListener('click', async () => {
+            const name = document.getElementById('patientName').value;
+            const phone = document.getElementById('patientPhone').value;
+            const type = document.getElementById('onlineToggle').classList.contains('btn') ? 'online' : 'walkin';
+            if(!name || !phone) { alert('Name and phone required'); return; }
+            await runTransaction(window.db, async (transaction) => {
+                const stateRef = docRef(`clinics/${window.currentClinicId}/liveQueue/state`);
+                const state = (await transaction.get(stateRef)).data() || { queue: [], nextToken: 1 };
+                const newToken = state.nextToken || 1;
+                const newPatient = { token: newToken, name, phone, type, status: 'waiting', position: state.queue.length + 1, loyaltyStamps: 0, needAssist: false, timestamp: Date.now() };
+                state.queue.push(newPatient);
+                if(type === 'online') state.onlineCount = (state.onlineCount || 0) + 1;
+                else state.walkinCount = (state.walkinCount || 0) + 1;
+                state.nextToken = newToken + 1;
+                transaction.set(stateRef, state);
+                window.currentPatientToken = newToken;
+            });
+            alert(`Checked in! Your token: ${window.currentPatientToken}`);
+            switchRole('patientStatus');
+            refreshPatientStatus();
+        });
+        
+        document.getElementById('onlineToggle')?.addEventListener('click', function() { this.classList.add('btn'); document.getElementById('walkinToggle').classList.remove('btn'); document.getElementById('walkinToggle').classList.add('btn-secondary'); });
+        document.getElementById('walkinToggle')?.addEventListener('click', function() { this.classList.add('btn'); document.getElementById('onlineToggle').classList.remove('btn'); document.getElementById('onlineToggle').classList.add('btn-secondary'); });
+        
+        document.getElementById('roomReadyBtn')?.addEventListener('click', async () => {
+            await runTransaction(window.db, async (transaction) => {
+                const stateRef = docRef(`clinics/${window.currentClinicId}/liveQueue/state`);
+                const state = (await transaction.get(stateRef)).data();
+                if(state.queue.length > 0) {
+                    const next = state.queue.shift();
+                    state.currentToken = next.token;
+                    if(next.type === 'online') state.onlineCount--;
+                    else state.walkinCount--;
+                    state.queue.forEach((p,idx) => p.position = idx+1);
+                    transaction.set(stateRef, state);
+                }
+            });
+        });
+        
+        document.getElementById('clearQueueBtn')?.addEventListener('click', () => {
+            showModal('Clear Queue', 'Are you sure? This will remove all waiting patients. Undo available for 10s.', async () => {
+                const stateRef = docRef(`clinics/${window.currentClinicId}/liveQueue/state`);
+                const state = (await getDoc(stateRef)).data();
+                window.lastQueueBackup = state.queue;
+                await updateDoc(stateRef, { queue: [], onlineCount: 0, walkinCount: 0 });
+                if(window.undoTimeout) clearTimeout(window.undoTimeout);
+                document.getElementById('undoClearBtn').disabled = false;
+                window.undoTimeout = setTimeout(async () => { await updateDoc(stateRef, { queue: window.lastQueueBackup }); document.getElementById('undoClearBtn').disabled = true; }, 10000);
+            });
+        });
+        
+        document.getElementById('undoClearBtn')?.addEventListener('click', async () => {
+            if(window.lastQueueBackup) await updateDoc(docRef(`clinics/${window.currentClinicId}/liveQueue/state`), { queue: window.lastQueueBackup });
+            document.getElementById('undoClearBtn').disabled = true;
+        });
+        
+        document.getElementById('broadcastBtn')?.addEventListener('click', () => {
+            const msg = prompt('Broadcast message:');
+            if(msg) alert(`Broadcasted: ${msg}`); // Could implement real broadcast
+        });
+        
+        document.getElementById('shareGiftBtn')?.addEventListener('click', () => { window.open(`https://wa.me/?text=🎁 Here's your gift code for ${document.getElementById('clinicNameDisplay').innerText}!`); });
+        document.getElementById('googleReviewBtn')?.addEventListener('click', () => { window.open('https://search.google.com/local/writereview', '_blank'); });
+        document.getElementById('tvViewBtn')?.addEventListener('click', () => { window.open(`/tv?clinic=${window.currentClinicId}`, '_blank'); });
+        document.getElementById('emergencyModeBtn')?.addEventListener('click', async () => { await updateDoc(docRef(`clinics/${window.currentClinicId}/liveQueue/state`), { emergencyMode: true }); alert('Emergency mode activated'); });
+        
+        document.getElementById('createClinicBtn')?.addEventListener('click', async () => {
+            const name = document.getElementById('newClinicName').value;
+            const doctorPin = document.getElementById('newDoctorPin').value;
+            const receptionistPin = document.getElementById('newReceptionistPin').value;
+            const hours = document.getElementById('newHours').value;
+            const maxPatients = parseInt(document.getElementById('newMaxPatients').value);
+            const closedDays = document.getElementById('newClosedDays').value.split(',').map(s=>s.trim());
+            const loyaltyEnabled = document.getElementById('newLoyaltyToggle').checked;
+            const rewardDesc = document.getElementById('newRewardDesc').value;
+            const id = name.toLowerCase().replace(/\s/g,'_') + '_' + Date.now();
+            await setDoc(docRef(`clinics/${id}`), { name, doctorPin, receptionistPin, hours, maxPatients, closedDays, loyaltyEnabled, rewardDesc, theme: 'lightblue' });
+            await setDoc(docRef(`clinics/${id}/liveQueue/state`), { queue: [], currentToken: null, onlineCount: 0, walkinCount: 0, nextToken: 1 });
+            document.getElementById('newClinicResult').innerHTML = `<p>✅ Clinic created! QR coming soon. Link: ${window.location.href}?clinic=${id}</p>`;
+            loadClinics();
+        });
+        
+        loadClinics();
+        if(new URLSearchParams(location.search).get('clinic')) document.getElementById('clinicSelect').value = new URLSearchParams(location.search).get('clinic');
+    </script>
+</body>
+</html>
